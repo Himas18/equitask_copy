@@ -24,7 +24,7 @@ export const createTask = (task) => API.post("/tasks", task);
 export const getTasks = () => API.get("/tasks");
 export const updateTask = (id, task) => API.put(`/tasks/${id}`, task);
 export const deleteTask = (id) => API.delete(`/tasks/${id}`);
-export const getTeam = () => API.get("/team");
+export const getTeam = () => API.get("/users");
 export const getNotifications = () => API.get("/notifications");
 export const markNotificationRead = (id) => API.patch(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => API.patch("/notifications/read-all");

@@ -1,3 +1,4 @@
+// backend/routes/tasks.js
 import express from "express";
 import Task from "../models/Task.js";
 import User from "../models/User.js";
@@ -5,52 +6,91 @@ import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// Suggest user for task assignment
-router.post("/suggest", verifyToken, async (req, res) => {
+// ✅ Get all tasks
+router.get("/", verifyToken, async (req, res) => {
   try {
-    const { requiredSkills = [], estimatedHours = 0 } = req.body;
+    const tasks = await Task.find()
+      .populate("assignee", "username email role")
+      .populate("createdBy", "username email role");
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const employees = await User.find({ role: "employee" });
+// ✅ Create a new task (lead only)
+router.post("/", verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== "lead") {
+      return res.status(403).json({ error: "Only leads can create tasks" });
+    }
 
-    // Get all active tasks (pending, in_progress, overdue)
-    const tasks = await Task.find({
-      status: { $in: ["pending", "in_progress", "overdue"] },
+    const { title, description, estimatedHours, priority, assignee, dueDate } = req.body;
+
+    const task = new Task({
+      title,
+      description,
+      estimatedHours,
+      priority,
+      assignee,
+      createdBy: req.user.id,
+      dueDate,
     });
 
-    const workloadMap = {};
-    tasks.forEach((t) => {
-      workloadMap[t.assignee] = (workloadMap[t.assignee] || 0) + (t.estimatedHours || 0);
+    await task.save();
+    res.status(201).json(task);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ Update a task (lead only)
+router.put("/:id", verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== "lead") {
+      return res.status(403).json({ error: "Only leads can update tasks" });
+    }
+
+    const task = await Task.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
     });
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const suggestions = employees.map((emp) => {
-      const currentLoad = workloadMap[emp._id] || 0;
-      const availableCapacity = (emp.weeklyCapacityHours || 40) - currentLoad;
+// ✅ Update task status (employee or lead)
+router.patch("/:id/status", verifyToken, async (req, res) => {
+  try {
+    const { status } = req.body;
 
-      const skillMatchCount = requiredSkills.filter((s) =>
-        emp.skills.includes(s)
-      ).length;
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ error: "Task not found" });
 
-      return {
-        user_id: emp._id,
-        name: emp.name,
-        current_workload: currentLoad,
-        available_capacity: availableCapacity,
-        skill_match_count: skillMatchCount,
-        status: emp.status || (currentLoad < (emp.weeklyCapacityHours || 40) ? "available" : "busy"),
-      };
-    });
+    // Employees can only update their own tasks
+    if (req.user.role === "employee" && String(task.assignee) !== req.user.id) {
+      return res.status(403).json({ error: "Not allowed" });
+    }
 
-    // Filter out employees who would exceed 40h
-    const filtered = suggestions.filter((s) => s.current_workload + estimatedHours <= 40);
+    task.status = status;
+    await task.save();
 
-    // Sort: least workload → most skill matches → name
-    filtered.sort((a, b) => {
-      if (a.current_workload !== b.current_workload) return a.current_workload - b.current_workload;
-      if (b.skill_match_count !== a.skill_match_count) return b.skill_match_count - a.skill_match_count;
-      return a.name.localeCompare(b.name);
-    });
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    res.json(filtered);
+// ✅ Delete a task (lead only)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== "lead") {
+      return res.status(403).json({ error: "Only leads can delete tasks" });
+    }
+
+    await Task.findByIdAndDelete(req.params.id);
+    res.json({ message: "Task deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

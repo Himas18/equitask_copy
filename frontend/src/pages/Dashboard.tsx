@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Clock, AlertTriangle, TrendingUp, Plus, Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import WeeklyReportDialog from "@/components/WeeklyReportDialog";
-import { getTasks, getTeam } from "@/api";   // ✅ replaced supabase
+import { getTasks, getTeam } from "@/api";   // ✅ using backend API
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -29,21 +29,22 @@ const Dashboard = () => {
     }
   }, [profile]);
 
+  // ✅ Fetch tasks analytics
   const fetchAnalytics = async () => {
     try {
       const { data } = await getTasks();
 
       // Filter tasks for employees
       const tasks = profile?.role === "employee"
-        ? data.filter((t: any) => t.userId === profile.id)
+        ? data.filter((t: any) => t.assignee === profile.id)
         : data;
 
       const stats = {
         totalTasks: tasks.length,
-        completedTasks: tasks.filter((t: any) => t.completed).length,
-        inProgressTasks: tasks.filter((t: any) => !t.completed).length, // simplified
-        pendingTasks: tasks.filter((t: any) => !t.completed).length,   // same as inProgress for now
-        overdueTasks: 0, // add dueDate check later if schema supports
+        completedTasks: tasks.filter((t: any) => t.status === "completed").length,
+        inProgressTasks: tasks.filter((t: any) => t.status === "in_progress").length,
+        pendingTasks: tasks.filter((t: any) => t.status === "pending").length,
+        overdueTasks: tasks.filter((t: any) => t.status === "overdue").length,
       };
 
       setAnalytics(stats);
@@ -52,12 +53,14 @@ const Dashboard = () => {
     }
   };
 
+  // ✅ Fetch team members
   const fetchTeamMembers = async () => {
     try {
-      const { data } = await getTeam();
-      setTeamMembers(data.users.filter((u: any) => u.role === "employee"));
+      const { data } = await getTeam(); // data is an array
+      setTeamMembers(data.filter((u: any) => u.role === "employee"));
     } catch (err) {
       console.error("Error fetching team members:", err);
+      setTeamMembers([]); // prevent crash
     }
   };
 
@@ -76,8 +79,8 @@ const Dashboard = () => {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight">
               {profile?.role === "lead"
-                ? `Welcome back, ${profile?.name || "Team Lead"}! 👋`
-                : `Welcome, ${profile?.name || "Team Member"}!`}
+                ? `Welcome back, ${profile?.username || "Team Lead"}! 👋`
+                : `Welcome, ${profile?.username || "Team Member"}!`}
             </h1>
             {profile?.role === "lead" && (
               <p className="text-muted-foreground">
@@ -157,17 +160,19 @@ const Dashboard = () => {
                   </p>
                 ) : (
                   teamMembers.slice(0, 3).map((user) => (
-                    <div key={user.id} className="flex items-center justify-between">
+                    <div key={user._id} className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="h-8 w-8 bg-gradient-primary rounded-full flex items-center justify-center">
-                          <span className="text-xs font-medium text-white">{user.name.charAt(0)}</span>
+                          <span className="text-xs font-medium text-white">{user.username.charAt(0)}</span>
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{user.name}</p>
+                          <p className="text-sm font-medium">{user.username}</p>
                           <p className="text-xs text-muted-foreground">{user.status}</p>
                         </div>
                       </div>
-                      <Badge variant="default" className="text-xs">Active</Badge>
+                      <Badge variant="default" className="text-xs">
+                        Active
+                      </Badge>
                     </div>
                   ))
                 )}
