@@ -12,16 +12,21 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { 
+  getNotifications, 
+  markNotificationRead, 
+  markAllNotificationsRead, 
+  deleteNotification 
+} from "@/api";
 
 interface Notification {
-  id: string;
+  _id: string;
   title: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  created_at: string;
+  type: "info" | "success" | "warning" | "error";
+  createdAt: string;
   read: boolean;
-  user_id: string;
+  userId: string;
 }
 
 const NotificationDropdown = () => {
@@ -30,121 +35,60 @@ const NotificationDropdown = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (profile?.user_id) {
+    if (profile?.id) {
       fetchNotifications();
-      
-      // Set up real-time subscription for notifications
-      const channel = supabase
-        .channel('notifications_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${profile.user_id}`
-          },
-          () => {
-            fetchNotifications(); // Refresh notifications when changes occur
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
     }
-  }, [profile?.user_id]);
+  }, [profile?.id]);
 
   const fetchNotifications = async () => {
     try {
-      if (!profile?.user_id) return;
-      
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', profile.user_id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (error) throw error;
-      
-      setNotifications((data || []).map(notification => ({
-        ...notification,
-        type: notification.type as 'info' | 'success' | 'warning' | 'error'
-      })));
+      const { data } = await getNotifications();
+      setNotifications(data || []);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error("Error fetching notifications:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id)
-        .eq('user_id', profile?.user_id);
-      
-      if (error) throw error;
-      
-      setNotifications(prev => 
-        prev.map(notification => 
-          notification.id === id 
-            ? { ...notification, read: true }
-            : notification
-        )
+      await markNotificationRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === id ? { ...n, read: true } : n))
       );
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error("Error marking notification as read:", error);
     }
   };
 
-  const markAllAsRead = async () => {
+  const markAllAsReadHandler = async () => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('user_id', profile?.user_id)
-        .eq('read', false);
-      
-      if (error) throw error;
-      
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, read: true }))
-      );
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (error) {
-      console.error('Error marking all notifications as read:', error);
+      console.error("Error marking all notifications as read:", error);
     }
   };
 
   const removeNotification = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', profile?.user_id);
-      
-      if (error) throw error;
-      
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      await deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n._id !== id));
     } catch (error) {
-      console.error('Error removing notification:', error);
+      console.error("Error removing notification:", error);
     }
   };
 
-  const getIcon = (type: Notification['type']) => {
+  const getIcon = (type: Notification["type"]) => {
     switch (type) {
-      case 'success':
+      case "success":
         return <CheckCircle className="h-4 w-4 text-success" />;
-      case 'warning':
+      case "warning":
         return <AlertTriangle className="h-4 w-4 text-warning" />;
-      case 'error':
+      case "error":
         return <X className="h-4 w-4 text-destructive" />;
       default:
         return <Clock className="h-4 w-4 text-primary" />;
@@ -163,8 +107,8 @@ const NotificationDropdown = () => {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent 
-        className="w-80 p-0 bg-card border shadow-lg" 
+      <DropdownMenuContent
+        className="w-80 p-0 bg-card border shadow-lg"
         align="end"
         sideOffset={8}
       >
@@ -173,17 +117,17 @@ const NotificationDropdown = () => {
             Notifications
           </DropdownMenuLabel>
           {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={markAllAsRead}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={markAllAsReadHandler}
               className="text-xs h-auto p-1 text-muted-foreground hover:text-foreground"
             >
               Mark all read
             </Button>
           )}
         </div>
-        
+
         <ScrollArea className="max-h-80">
           {loading ? (
             <div className="p-4 text-center text-muted-foreground">
@@ -198,27 +142,33 @@ const NotificationDropdown = () => {
           ) : (
             notifications.map((notification) => (
               <DropdownMenuItem
-                key={notification.id}
+                key={notification._id}
                 className="p-0 focus:bg-muted/50"
-                onClick={() => markAsRead(notification.id)}
+                onClick={() => markAsRead(notification._id)}
               >
-                <div className={`w-full p-4 border-b last:border-b-0 ${
-                  !notification.read ? 'bg-primary/5' : ''
-                }`}>
+                <div
+                  className={`w-full p-4 border-b last:border-b-0 ${
+                    !notification.read ? "bg-primary/5" : ""
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 flex-1">
                       {getIcon(notification.type)}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${
-                          !notification.read ? 'text-foreground' : 'text-muted-foreground'
-                        }`}>
+                        <p
+                          className={`text-sm font-medium ${
+                            !notification.read
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                          }`}
+                        >
                           {notification.title}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                           {notification.message}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
-                          {new Date(notification.created_at).toLocaleString()}
+                          {new Date(notification.createdAt).toLocaleString()}
                         </p>
                       </div>
                     </div>
@@ -227,22 +177,19 @@ const NotificationDropdown = () => {
                       size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeNotification(notification.id);
+                        removeNotification(notification._id);
                       }}
                       className="h-auto p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X className="h-3 w-3" />
                     </Button>
                   </div>
-                  {!notification.read && (
-                    <div className="absolute left-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full" />
-                  )}
                 </div>
               </DropdownMenuItem>
             ))
           )}
         </ScrollArea>
-        
+
         {notifications.length > 0 && (
           <>
             <DropdownMenuSeparator />

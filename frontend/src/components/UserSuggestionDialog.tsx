@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Lightbulb, Clock, User, Star } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { suggestAssignee } from "@/api";
 
 interface UserSuggestion {
   user_id: string;
@@ -29,7 +29,7 @@ const UserSuggestionDialog = ({
   onOpenChange,
   requiredSkills,
   estimatedHours,
-  onUserSelect
+  onUserSelect,
 }: UserSuggestionDialogProps) => {
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,12 +47,10 @@ const UserSuggestionDialog = ({
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('suggest_user_for_task', {
-        required_skills: requiredSkills,
-        estimated_hours: estimatedHours
+      const { data } = await suggestAssignee({
+        requiredSkills,
+        estimatedHours,
       });
-
-      if (error) throw error;
       setSuggestions(data || []);
     } catch (error: any) {
       toast({
@@ -79,7 +77,7 @@ const UserSuggestionDialog = ({
             Suggested Users
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div className="text-sm text-muted-foreground">
@@ -102,7 +100,7 @@ const UserSuggestionDialog = ({
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {suggestions.map((suggestion, index) => (
-                <Card 
+                <Card
                   key={suggestion.user_id}
                   className="cursor-pointer hover:shadow-md transition-shadow"
                   onClick={() => handleUserSelect(suggestion)}
@@ -128,22 +126,23 @@ const UserSuggestionDialog = ({
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         {suggestion.skill_match_count > 0 && (
                           <Badge variant="secondary" className="text-xs">
-                            {suggestion.skill_match_count} skill{suggestion.skill_match_count !== 1 ? 's' : ''} match
+                            {suggestion.skill_match_count} skill
+                            {suggestion.skill_match_count !== 1 ? "s" : ""} match
                           </Badge>
                         )}
-                        <Badge 
-                          variant={suggestion.status === 'available' ? 'default' : 'secondary'}
+                        <Badge
+                          variant={suggestion.status === "available" ? "default" : "secondary"}
                           className="text-xs"
                         >
                           {suggestion.status}
                         </Badge>
                       </div>
                     </div>
-                    
+
                     <div className="mt-3 pt-3 border-t">
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Current workload: {suggestion.current_workload}h</span>

@@ -1,42 +1,34 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { login, register } from "@/api";   // ✅ new API
 
 interface Profile {
   id: string;
-  user_id: string;
   name: string;
   email: string;
-  role: 'employee' | 'lead';
-  skills: string[];
-  status: 'available' | 'busy';
-  weekly_capacity_hours: number;
-  notification_prefs: {
+  role: "employee" | "lead";
+  skills?: string[];
+  status?: "available" | "busy";
+  weekly_capacity_hours?: number;
+  notification_prefs?: {
     email: boolean;
     inApp: boolean;
   };
-  created_at: string;
-  updated_at: string;
 }
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, userData: { name: string; role: 'employee' | 'lead' }) => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
+  signUp: (email: string, password: string, userData: { name: string; role: "employee" | "lead" }) => Promise<{ error: any }>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 };
 
@@ -45,117 +37,51 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) throw error;
-      setProfile({
-        ...data,
-        notification_prefs: data.notification_prefs as { email: boolean; inApp: boolean }
-      } as Profile);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
-
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    // Restore profile from localStorage if token exists
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      setProfile(JSON.parse(storedUser));
+    }
+    setLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) throw error;
-      
+      const { data } = await login({ email, password });
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      setProfile(data.user);
+
+      toast({ title: "Welcome back!", description: "Login successful." });
       return { error: null };
     } catch (error: any) {
       return { error };
     }
   };
 
-  const signUp = async (email: string, password: string, userData: { name: string; role: 'employee' | 'lead' }) => {
+  const signUp = async (email: string, password: string, userData: { name: string; role: "employee" | "lead" }) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: userData.name,
-            role: userData.role,
-          },
-        },
-      });
-
-      if (error) throw error;
-      
-      // Since email confirmation is disabled, the user should be logged in immediately
-      if (data.user && data.session) {
-        toast({
-          title: "Account created successfully!",
-          description: "You are now logged in.",
-        });
-      }
-      
+      await register({ email, password, username: userData.name });
+      toast({ title: "Account created!", description: "Please login to continue." });
       return { error: null };
     } catch (error: any) {
       return { error };
     }
   };
 
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setProfile(null);
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
+  const signOut = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setProfile(null);
+    toast({ title: "Signed out", description: "You have been logged out." });
   };
 
-  const value = {
-    user,
-    session,
+  const value: AuthContextType = {
     profile,
     loading,
     signIn,
@@ -163,9 +89,5 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signOut,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

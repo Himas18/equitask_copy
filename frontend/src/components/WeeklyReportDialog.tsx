@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, FileText, TrendingUp, Clock, CheckCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { getWeeklyReport } from "@/api";
 
 interface WeeklyReport {
   totalTasks: number;
@@ -21,67 +21,14 @@ const WeeklyReportDialog = () => {
   const { profile } = useAuth();
 
   const generateReport = async () => {
-    if (!profile?.user_id) return;
-    
+    if (!profile?.id) return;
+
     setLoading(true);
     try {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(endOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-
-      // Fetch tasks for this week
-      const { data: tasks, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          assignee:profiles!tasks_assignee_id_fkey(name)
-        `)
-        .gte('created_at', startOfWeek.toISOString())
-        .lte('created_at', endOfWeek.toISOString());
-
-      if (tasksError) throw tasksError;
-
-      // Fetch all team members
-      const { data: teamMembers, error: teamError } = await supabase
-        .from('profiles')
-        .select('*');
-
-      if (teamError) throw teamError;
-
-      const totalTasks = tasks?.length || 0;
-      const completedTasks = tasks?.filter(t => t.status === 'completed').length || 0;
-      const overdueTasks = tasks?.filter(t => t.status === 'overdue').length || 0;
-
-      // Calculate top performers
-      const performanceMap = new Map();
-      tasks?.forEach(task => {
-        if (task.status === 'completed' && task.assignee?.name) {
-          const current = performanceMap.get(task.assignee.name) || 0;
-          performanceMap.set(task.assignee.name, current + 1);
-        }
-      });
-
-      const topPerformers = Array.from(performanceMap.entries())
-        .map(([name, completedTasks]) => ({ name, completedTasks }))
-        .sort((a, b) => b.completedTasks - a.completedTasks)
-        .slice(0, 3);
-
-      const reportData: WeeklyReport = {
-        totalTasks,
-        completedTasks,
-        overdueTasks,
-        averageCompletionTime: 0, // Could calculate based on created_at vs completed_at
-        teamUtilization: teamMembers ? (completedTasks / teamMembers.length) : 0,
-        topPerformers
-      };
-
-      setReport(reportData);
+      const { data } = await getWeeklyReport();
+      setReport(data);
     } catch (error) {
-      console.error('Error generating report:', error);
+      console.error("Error generating report:", error);
     } finally {
       setLoading(false);
     }
@@ -101,23 +48,25 @@ Summary:
 - Team Utilization: ${report.teamUtilization.toFixed(1)} tasks per member
 
 Top Performers:
-${report.topPerformers.map((p, i) => `${i + 1}. ${p.name} - ${p.completedTasks} tasks completed`).join('\n')}
+${report.topPerformers
+  .map((p, i) => `${i + 1}. ${p.name} - ${p.completedTasks} tasks completed`)
+  .join("\n")}
 
 Generated on: ${new Date().toLocaleDateString()}
     `;
 
-    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const blob = new Blob([reportContent], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `weekly-report-${new Date().toISOString().split('T')[0]}.txt`;
+    a.download = `weekly-report-${new Date().toISOString().split("T")[0]}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  if (profile?.role !== 'lead') {
+  if (profile?.role !== "lead") {
     return null;
   }
 
@@ -152,7 +101,7 @@ Generated on: ${new Date().toLocaleDateString()}
                     <div className="text-2xl font-bold">{report.totalTasks}</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Completed</CardTitle>
@@ -162,7 +111,7 @@ Generated on: ${new Date().toLocaleDateString()}
                     <div className="text-2xl font-bold text-success">{report.completedTasks}</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Overdue</CardTitle>
@@ -172,7 +121,7 @@ Generated on: ${new Date().toLocaleDateString()}
                     <div className="text-2xl font-bold text-warning">{report.overdueTasks}</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Utilization</CardTitle>
@@ -193,7 +142,9 @@ Generated on: ${new Date().toLocaleDateString()}
                     <div className="space-y-2">
                       {report.topPerformers.map((performer, index) => (
                         <div key={performer.name} className="flex justify-between items-center">
-                          <span>{index + 1}. {performer.name}</span>
+                          <span>
+                            {index + 1}. {performer.name}
+                          </span>
                           <span className="font-semibold">{performer.completedTasks} tasks</span>
                         </div>
                       ))}

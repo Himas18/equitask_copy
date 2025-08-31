@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -20,20 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-interface Profile {
-  id: string;
-  user_id: string;
-  name: string;
-  email: string;
-  role: string;
-  skills: string[];
-  status: string;
-  weekly_capacity_hours: number;
-  notification_prefs: any;
-  created_at: string;
-  updated_at: string;
-}
+import { updateTask, deleteTask, getTeam } from "@/api";  // ✅ use API
 
 interface EditTaskDialogProps {
   task: any;
@@ -44,8 +30,8 @@ interface EditTaskDialogProps {
 
 const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [employees, setEmployees] = useState<Profile[]>([]);
-  const { user } = useAuth();
+  const [employees, setEmployees] = useState<any[]>([]);
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -64,7 +50,7 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
         description: task.description || "",
         priority: task.priority || "medium",
         estimatedHours: task.estimated_hours?.toString() || "",
-        assigneeId: task.assignee_id || "",
+        assigneeId: task.userId || "",
         dueDate: task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : "",
       });
       fetchEmployees();
@@ -73,13 +59,8 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("role", "employee");
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const { data } = await getTeam();
+      setEmployees(data.users.filter((u: any) => u.role === "employee"));
     } catch (error) {
       console.error("Error fetching employees:", error);
     }
@@ -87,24 +68,18 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !task) return;
-    
+    if (!task) return;
+
     setIsLoading(true);
-
     try {
-      const { error } = await supabase
-        .from("tasks")
-        .update({
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority,
-          estimated_hours: parseFloat(formData.estimatedHours),
-          assignee_id: formData.assigneeId || null,
-          due_date: formData.dueDate || null,
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
+      await updateTask(task._id, {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        estimated_hours: parseFloat(formData.estimatedHours),
+        userId: formData.assigneeId || null,
+        due_date: formData.dueDate || null,
+      });
 
       toast({
         title: "Task updated successfully!",
@@ -126,16 +101,10 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
 
   const handleDelete = async () => {
     if (!task) return;
-    
+
     setIsLoading(true);
-
     try {
-      const { error } = await supabase
-        .from("tasks")
-        .delete()
-        .eq('id', task.id);
-
-      if (error) throw error;
+      await deleteTask(task._id);
 
       toast({
         title: "Task deleted successfully!",
@@ -234,7 +203,7 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
               </SelectTrigger>
               <SelectContent>
                 {employees.map((employee) => (
-                  <SelectItem key={employee.id} value={employee.user_id}>
+                  <SelectItem key={employee.id} value={employee.id}>
                     {employee.name} ({employee.email})
                   </SelectItem>
                 ))}
@@ -253,12 +222,7 @@ const EditTaskDialog = ({ task, open, onOpenChange, onTaskUpdated }: EditTaskDia
           </div>
 
           <div className="flex justify-between space-x-2 pt-4">
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={isLoading}
-            >
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={isLoading}>
               Delete Task
             </Button>
             <div className="flex space-x-2">

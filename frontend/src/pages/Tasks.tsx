@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { PriorityBadge } from "@/components/ui/priority-badge";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Plus, Search, Filter, MoreHorizontal, User, Calendar, Clock, Edit, Trash } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, User, Calendar, Clock, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { TaskStatus, TaskPriority } from "@/lib/types";
 import CreateTaskDialog from "@/components/CreateTaskDialog";
 import EditTaskDialog from "@/components/EditTaskDialog";
+import { getTasks, updateTask } from "@/api";   // ✅ replaced supabase with API
 
 const Tasks = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,24 +28,17 @@ const Tasks = () => {
 
   const fetchTasks = async () => {
     try {
-      let query = supabase
-        .from('tasks')
-        .select(`
-          *,
-          assignee:profiles!tasks_assignee_id_fkey(id, name, email, role),
-          created_by:profiles!tasks_created_by_id_fkey(id, name, email, role)
-        `);
+      const { data } = await getTasks();
+      let filtered = data;
 
-      // Employees only see their assigned tasks
-      if (!isTeamLead && profile?.user_id) {
-        query = query.eq('assignee_id', profile.user_id);
+      // Employees only see their tasks
+      if (!isTeamLead && profile?.id) {
+        filtered = filtered.filter((t: any) => t.userId === profile.id);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setTasks(data || []);
+      setTasks(filtered || []);
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error("Error fetching tasks:", error);
       toast({
         title: "Error",
         description: "Failed to fetch tasks",
@@ -60,35 +53,31 @@ const Tasks = () => {
     fetchTasks();
   }, [profile]);
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description?.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === "all" || task.status === filterStatus;
     const matchesPriority = filterPriority === "all" || task.priority === filterPriority;
-    
+
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
   const updateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
     try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({ status: newStatus })
-        .eq('id', taskId);
-
-      if (error) throw error;
+      await updateTask(taskId, { status: newStatus });
 
       // Update local state
-      setTasks(prev => prev.map(task => 
-        task.id === taskId ? { ...task, status: newStatus } : task
-      ));
+      setTasks((prev) =>
+        prev.map((task) => (task._id === taskId ? { ...task, status: newStatus } : task))
+      );
 
       toast({
         title: "Task Updated",
-        description: `Task status changed to ${newStatus.replace('_', ' ')}`,
+        description: `Task status changed to ${newStatus.replace("_", " ")}`,
       });
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error("Error updating task:", error);
       toast({
         title: "Error",
         description: "Failed to update task status",
@@ -98,11 +87,14 @@ const Tasks = () => {
   };
 
   const getStatusActions = (status: TaskStatus) => {
-    const statusMap: Record<TaskStatus, { next: TaskStatus; label: string; variant: "default" | "destructive" | "secondary" }> = {
-      pending: { next: "in_progress" as TaskStatus, label: "Start Task", variant: "default" },
-      in_progress: { next: "completed" as TaskStatus, label: "Complete", variant: "default" },
-      completed: { next: "pending" as TaskStatus, label: "Reopen", variant: "secondary" },
-      overdue: { next: "in_progress" as TaskStatus, label: "Resume", variant: "destructive" },
+    const statusMap: Record<
+      TaskStatus,
+      { next: TaskStatus; label: string; variant: "default" | "destructive" | "secondary" }
+    > = {
+      pending: { next: "in_progress", label: "Start Task", variant: "default" },
+      in_progress: { next: "completed", label: "Complete", variant: "default" },
+      completed: { next: "pending", label: "Reopen", variant: "secondary" },
+      overdue: { next: "in_progress", label: "Resume", variant: "destructive" },
     };
     return statusMap[status];
   };
@@ -114,9 +106,7 @@ const Tasks = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
-            <p className="text-muted-foreground">
-              Manage and track your team's tasks
-            </p>
+            <p className="text-muted-foreground">Manage and track your team's tasks</p>
           </div>
           {isTeamLead && (
             <div className="flex gap-2">
@@ -175,19 +165,19 @@ const Tasks = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredTasks.map((task) => {
               const statusAction = getStatusActions(task.status);
-              const canUpdateStatus = !isTeamLead || task.assignee_id === profile?.user_id;
-              
+              const canUpdateStatus = !isTeamLead || task.userId === profile?.id;
+
               return (
-                <Card key={task.id} className="group hover:shadow-md transition-all duration-200 animate-fade-in">
+                <Card key={task._id} className="group hover:shadow-md transition-all duration-200 animate-fade-in">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-lg font-semibold line-clamp-2 group-hover:text-primary transition-colors">
                         {task.title}
                       </CardTitle>
                       {isTeamLead && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           className="opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => setEditingTask(task)}
                         >
@@ -195,11 +185,9 @@ const Tasks = () => {
                         </Button>
                       )}
                     </div>
-                    <CardDescription className="line-clamp-2">
-                      {task.description}
-                    </CardDescription>
+                    <CardDescription className="line-clamp-2">{task.description}</CardDescription>
                   </CardHeader>
-                  
+
                   <CardContent className="space-y-4">
                     {/* Badges */}
                     <div className="flex flex-wrap gap-2">
@@ -211,11 +199,11 @@ const Tasks = () => {
                     <div className="space-y-2 text-sm text-muted-foreground">
                       <div className="flex items-center gap-2">
                         <User className="h-4 w-4" />
-                        <span>{task.assignee?.name || 'Unassigned'}</span>
+                        <span>{task.assigneeName || "Unassigned"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4" />
-                        <span>{task.estimated_hours}h estimated</span>
+                        <span>{task.estimated_hours || 0}h estimated</span>
                       </div>
                       {task.due_date && (
                         <div className="flex items-center gap-2">
@@ -232,14 +220,14 @@ const Tasks = () => {
                           size="sm"
                           variant={statusAction.variant}
                           className="flex-1"
-                          onClick={() => updateTaskStatus(task.id, statusAction.next)}
+                          onClick={() => updateTaskStatus(task._id, statusAction.next)}
                         >
                           {statusAction.label}
                         </Button>
                       )}
                       {isTeamLead && (
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           onClick={() => setEditingTask(task)}
                         >
@@ -255,7 +243,7 @@ const Tasks = () => {
           </div>
         )}
 
-        {filteredTasks.length === 0 && (
+        {filteredTasks.length === 0 && !loading && (
           <div className="text-center py-12">
             <div className="space-y-2">
               <h3 className="text-lg font-medium">No tasks found</h3>

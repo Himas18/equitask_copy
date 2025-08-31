@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -24,30 +23,16 @@ import {
 import { Plus, Lightbulb, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import UserSuggestionDialog from "./UserSuggestionDialog";
-
-interface Profile {
-  id: string;
-  user_id: string;
-  name: string;
-  email: string;
-  role: string;
-  skills: string[];
-  status: string;
-  weekly_capacity_hours: number;
-  current_workload_hours: number;
-  notification_prefs: any;
-  created_at: string;
-  updated_at: string;
-}
+import { createTask, getTeam } from "@/api";   // ✅ use API
 
 const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [employees, setEmployees] = useState<Profile[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -60,20 +45,13 @@ const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
   });
 
   useEffect(() => {
-    if (open) {
-      fetchEmployees();
-    }
+    if (open) fetchEmployees();
   }, [open]);
 
   const fetchEmployees = async () => {
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("role", "employee");
-
-      if (error) throw error;
-      setEmployees(data || []);
+      const { data } = await getTeam();
+      setEmployees(data.users.filter((u: any) => u.role === "employee"));
     } catch (error) {
       console.error("Error fetching employees:", error);
     }
@@ -87,7 +65,7 @@ const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
   };
 
   const removeSkill = (skillToRemove: string) => {
-    setRequiredSkills(requiredSkills.filter(skill => skill !== skillToRemove));
+    setRequiredSkills(requiredSkills.filter((skill) => skill !== skillToRemove));
   };
 
   const handleUserSelect = (userId: string, userName: string) => {
@@ -100,26 +78,23 @@ const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-    
-    setIsLoading(true);
+    if (!profile) return;
 
+    setIsLoading(true);
     try {
-      const { error } = await supabase.from("tasks").insert({
+      await createTask({
         title: formData.title,
         description: formData.description,
         priority: formData.priority,
-        estimated_hours: parseFloat(formData.estimatedHours),
-        assignee_id: formData.assigneeId || null,
-        created_by_id: user.id,
-        due_date: formData.dueDate || null,
+        estimatedHours: parseFloat(formData.estimatedHours),
+        assignee: formData.assigneeId || null,
+        createdBy: profile.id,
+        dueDate: formData.dueDate || null,
       });
-
-      if (error) throw error;
 
       toast({
         title: "Task created successfully!",
-        description: "The task has been assigned to the team member.",
+        description: "The task has been assigned.",
       });
 
       setFormData({
@@ -237,7 +212,7 @@ const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
                 onChange={(e) => setNewSkill(e.target.value)}
                 placeholder="Add required skill"
                 onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     e.preventDefault();
                     addSkill();
                   }
@@ -272,7 +247,7 @@ const CreateTaskDialog = ({ onTaskCreated }: { onTaskCreated: () => void }) => {
               </SelectTrigger>
               <SelectContent>
                 {employees.map((employee) => (
-                  <SelectItem key={employee.id} value={employee.user_id}>
+                  <SelectItem key={employee.id} value={employee.id}>
                     <div className="flex items-center justify-between w-full">
                       <span>{employee.name}</span>
                       <div className="text-xs text-muted-foreground ml-2">
