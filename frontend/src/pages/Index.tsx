@@ -70,7 +70,7 @@ const Index = () => {
                 EquiTask
               </span>
             </div>
-            <Link to="/auth">
+            <Link to="/login">
               <Button className="bg-gradient-primary hover:shadow-primary transition-all duration-300">
                 Get Started
                 <ArrowRight className="h-4 w-4 ml-2" />
@@ -104,7 +104,7 @@ const Index = () => {
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in">
-            <Link to="/auth">
+            <Link to="/login">
               <Button size="lg" className="bg-gradient-primary hover:shadow-primary transition-all duration-300">
                 Start Free Demo
                 <ArrowRight className="h-5 w-5 ml-2" />
@@ -196,7 +196,7 @@ const Index = () => {
           </div>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/auth">
+            <Link to="/login">
               <Button size="lg" className="bg-gradient-primary hover:shadow-primary transition-all duration-300">
                 Get Started Now
                 <ArrowRight className="h-5 w-5 ml-2" />

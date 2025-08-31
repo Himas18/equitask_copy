@@ -1,0 +1,16 @@
+{
+  "name": "EquiTask Dev",
+  "forwardPorts": [3000, 5173],
+  "portsAttributes": {
+    "3000": {
+      "label": "Backend",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    },
+    "5173": {
+      "label": "Frontend",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
+  }
+}

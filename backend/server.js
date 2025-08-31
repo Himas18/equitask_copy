@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import taskRoutes from "./routes/tasks.js";
@@ -14,10 +15,19 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "https://crispy-trout-r96gv7pgx4g35qqq-5173.app.github.dev",
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: [
+      process.env.FRONTEND_URL,
+      "https://crispy-trout-r96gv7pgx4g35qqq-5173.app.github.dev",
+       "https://crispy-trout-r96gv7pgx4g35qqq-8080.app.github.dev" // ✅ add this
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false,
+  })
+);
+
 
 // Routes
 app.use("/auth", authRoutes);
@@ -31,12 +41,15 @@ app.get("/", (req, res) => {
   res.send("✅ EquiTask MERN backend is running!");
 });
 
-// DB + server
-const PORT = process.env.PORT || 5000;
+// DB + Server
+const PORT = process.env.PORT || 3000; // ✅ Codespaces defaults to 8080
 
 mongoose
-  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(process.env.MONGO_URI)
   .then(() =>
-    app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`))
+    app.listen(PORT, "0.0.0.0", () => {
+      // ✅ bind to 0.0.0.0 so Codespaces proxy can see it
+      console.log(`✅ Server running on port ${PORT}`);
+    })
   )
   .catch((err) => console.error("❌ DB connection failed:", err));

@@ -1,14 +1,14 @@
-import { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
+import { ReactNode } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requireRole?: 'employee' | 'lead';
+  requireRole?: "employee" | "lead";
 }
 
 const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
-  const { user, profile, loading } = useAuth();
+  const { profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -18,8 +18,8 @@ const ProtectedRoute = ({ children, requireRole }: ProtectedRouteProps) => {
     );
   }
 
-  if (!user || !profile) {
-    return <Navigate to="/auth" replace />;
+  if (!profile) {
+    return <Navigate to="/login" replace />; // ✅ no more /auth
   }
 
   if (requireRole && profile.role !== requireRole) {

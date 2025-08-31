@@ -1,93 +1,97 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { login, register } from "@/api";
 import { useToast } from "@/hooks/use-toast";
-import { login, register } from "@/api";   // ✅ new API
 
-interface Profile {
+interface User {
   id: string;
-  name: string;
+  username: string;
   email: string;
-  role: "employee" | "lead";
-  skills?: string[];
-  status?: "available" | "busy";
-  weekly_capacity_hours?: number;
-  notification_prefs?: {
-    email: boolean;
-    inApp: boolean;
-  };
+  role?: string;
 }
 
 interface AuthContextType {
-  profile: Profile | null;
+  profile: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string, userData: { name: string; role: "employee" | "lead" }) => Promise<{ error: any }>;
+  signIn: (email: string, password: string) => Promise<{ error?: any }>;
+  signUp: (username: string, email: string, password: string, role?: string) => Promise<{ error?: any }>;
   signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [profile, setProfile] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    // Restore profile from localStorage if token exists
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setProfile(JSON.parse(storedUser));
-    }
-    setLoading(false);
-  }, []);
+  const navigate = useNavigate();
 
   const signIn = async (email: string, password: string) => {
+    setLoading(true);
     try {
-      const { data } = await login({ email, password });
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      setProfile(data.user);
+      const res = await login({ email, password });
 
-      toast({ title: "Welcome back!", description: "Login successful." });
+      localStorage.setItem("token", res.data.token);
+      setProfile(res.data.user);
+
+      toast({
+        title: "Welcome back",
+        description: "Successfully logged into EquiTask",
+      });
+
+      navigate("/app");
       return { error: null };
-    } catch (error: any) {
-      return { error };
+    } catch (err: any) {
+      toast({
+        title: "Login failed",
+        description: err.response?.data?.error || "Something went wrong",
+        variant: "destructive",
+      });
+      return { error: err };
+    } finally {
+      setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string, userData: { name: string; role: "employee" | "lead" }) => {
+  const signUp = async (username: string, email: string, password: string, role?: string) => {
+    setLoading(true);
     try {
-      await register({ email, password, username: userData.name });
-      toast({ title: "Account created!", description: "Please login to continue." });
+      await register({ username, email, password, role });
+
+      toast({
+        title: "Account created",
+        description: "You can now log in to EquiTask",
+      });
+
+      navigate("/login");
       return { error: null };
-    } catch (error: any) {
-      return { error };
+    } catch (err: any) {
+      toast({
+        title: "Registration failed",
+        description: err.response?.data?.error || "Something went wrong",
+        variant: "destructive",
+      });
+      return { error: err };
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("user");
     setProfile(null);
-    toast({ title: "Signed out", description: "You have been logged out." });
+    navigate("/login");
   };
 
-  const value: AuthContextType = {
-    profile,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ profile, loading, signIn, signUp, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

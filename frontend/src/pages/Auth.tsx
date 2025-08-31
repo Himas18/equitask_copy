@@ -17,31 +17,23 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, profile } = useAuth();
 
-  // Redirect if already logged in
   useEffect(() => {
-    if (user) {
+    if (profile) {
       navigate("/app");
     }
-  }, [user, navigate]);
+  }, [profile, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
     const { error } = await signIn(email, password);
-    
     if (error) {
       toast({
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Something went wrong",
         variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "Successfully logged in to EquiTask.",
       });
     }
     setIsLoading(false);
@@ -50,19 +42,12 @@ const Auth = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    const { error } = await signUp(email, password, { name, role });
-    
+    const { error } = await signUp(name, email, password, role);
     if (error) {
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || "Something went wrong",
         variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Account created successfully!",
-        description: "You are now logged in.",
       });
     }
     setIsLoading(false);
@@ -92,35 +77,32 @@ const Auth = () => {
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
               
+              {/* Sign In Tab */}
               <TabsContent value="signin" className="space-y-4">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
+                    <Label>Email</Label>
                     <Input
-                      id="signin-email"
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
+                    <Label>Password</Label>
                     <Input
-                      id="signin-password"
                       type="password"
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <Button 
                     type="submit" 
-                    className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
+                    className="w-full bg-gradient-primary"
                     disabled={isLoading}
                   >
                     {isLoading ? "Signing in..." : "Sign in"}
@@ -128,46 +110,41 @@ const Auth = () => {
                 </form>
               </TabsContent>
               
+              {/* Sign Up Tab */}
               <TabsContent value="signup" className="space-y-4">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
+                    <Label>Full Name</Label>
                     <Input
-                      id="signup-name"
                       type="text"
                       placeholder="Enter your full name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
+                    <Label>Email</Label>
                     <Input
-                      id="signup-email"
                       type="email"
                       placeholder="Enter your email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
+                    <Label>Password</Label>
                     <Input
-                      id="signup-password"
                       type="password"
                       placeholder="Create a password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-role">Role</Label>
+                    <Label>Role</Label>
                     <Select value={role} onValueChange={(value: 'employee' | 'lead') => setRole(value)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select your role" />
@@ -180,7 +157,7 @@ const Auth = () => {
                   </div>
                   <Button 
                     type="submit" 
-                    className="w-full bg-gradient-primary hover:shadow-primary transition-all duration-300"
+                    className="w-full bg-gradient-primary"
                     disabled={isLoading}
                   >
                     {isLoading ? "Creating account..." : "Create account"}
