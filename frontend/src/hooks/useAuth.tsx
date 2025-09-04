@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { login, register } from "@/api";
+import { login, register, me, apiClient } from "@/api"; // ⬅️ ensure you export a configured axios instance (apiClient)
 import { useToast } from "@/hooks/use-toast";
 
 interface User {
@@ -14,7 +14,12 @@ interface AuthContextType {
   profile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
-  signUp: (username: string, email: string, password: string, role: "employee" | "lead") => Promise<{ error?: any }>;
+  signUp: (
+    username: string,
+    email: string,
+    password: string,
+    role: "employee" | "lead"
+  ) => Promise<{ error?: any }>;
   signOut: () => void;
 }
 
@@ -26,11 +31,58 @@ export const useAuth = () => {
   return ctx;
 };
 
+// Helper to set/unset the Authorization header on your axios/fetch wrapper
+function setAuthToken(token: string | null) {
+  if (apiClient && (apiClient as any).defaults) {
+    if (token) {
+      (apiClient as any).defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    } else {
+      delete (apiClient as any).defaults.headers.common["Authorization"];
+    }
+  }
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profile, setProfile] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // ⬅️ start true so ProtectedRoute can wait
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // 🔹 Bootstrap auth on first mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          setProfile(null);
+          return;
+        }
+
+        setAuthToken(token);
+
+        // OPTION A: If your backend has /me, prefer fetching fresh user:
+        // (Make sure you export a `me()` call from @/api that hits something like GET /auth/me)
+        try {
+          const resp = await me();
+          setProfile(resp.data.user as User);
+        } catch {
+          // If /me fails (expired/invalid token), clean up
+          localStorage.removeItem("token");
+          setAuthToken(null);
+          setProfile(null);
+        }
+
+        // OPTION B (fallback): If you don't have /me, restore cached user:
+        // const cached = localStorage.getItem("user");
+        // if (cached) setProfile(JSON.parse(cached) as User);
+
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
+  }, []);
 
   // 🔹 Sign In
   const signIn = async (email: string, password: string) => {
@@ -38,8 +90,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const res = await login({ email, password });
 
-      localStorage.setItem("token", res.data.token);
-      setProfile(res.data.user);
+      const token: string = res.data.token;
+      const user: User = res.data.user;
+
+      // persist + wire token for subsequent requests
+      localStorage.setItem("token", token);
+      setAuthToken(token);
+
+      // set user in state (and optionally cache)
+      setProfile(user);
+      // localStorage.setItem("user", JSON.stringify(user)); // uncomment if you don’t have /me
 
       toast({
         title: "Welcome back",
@@ -51,7 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       toast({
         title: "Login failed",
-        description: err.response?.data?.error || "Something went wrong",
+        description: err?.response?.data?.error || "Something went wrong",
         variant: "destructive",
       });
       return { error: err };
@@ -61,10 +121,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // 🔹 Sign Up
-  const signUp = async (username: string, email: string, password: string, role: "employee" | "lead") => {
+  const signUp = async (
+    username: string,
+    email: string,
+    password: string,
+    role: "employee" | "lead"
+  ) => {
     setLoading(true);
     try {
-      await register({ username, email, password, role }); // ✅ send role
+      await register({ username, email, password, role });
 
       toast({
         title: "Account created",
@@ -76,7 +141,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       toast({
         title: "Registration failed",
-        description: err.response?.data?.error || "Something went wrong",
+        description: err?.response?.data?.error || "Something went wrong",
         variant: "destructive",
       });
       return { error: err };
@@ -88,6 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // 🔹 Sign Out
   const signOut = () => {
     localStorage.removeItem("token");
+    // localStorage.removeItem("user"); // if you enabled user caching
+    setAuthToken(null);
     setProfile(null);
     navigate("/login");
   };

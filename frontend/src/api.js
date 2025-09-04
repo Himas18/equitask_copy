@@ -1,11 +1,11 @@
 import axios from "axios";
 
-console.log("👉 API Base URL in frontend:", import.meta.env.VITE_API_URL);
+const baseURL = import.meta.env.VITE_API_URL || "http://localhost:4000";
+console.log("👉 API Base URL in frontend:", baseURL);
 
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL, // ✅ must come from .env
-});
+const API = axios.create({ baseURL });
 
+// Attach bearer token automatically
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem("token");
   if (token) {
@@ -13,6 +13,12 @@ API.interceptors.request.use((req) => {
   }
   return req;
 });
+
+/** --- Named exports used by AuthProvider --- **/
+export const apiClient = API;                // <-- add this
+export const me = () => API.get("/auth/me"); // <-- add this
+
+/** --- Your existing API calls --- **/
 export const getWeeklyReport = () => API.get("/analytics/weekly-report");
 export const suggestAssignee = (payload) => API.post("/tasks/suggest", payload);
 
@@ -30,4 +36,5 @@ export const markNotificationRead = (id) => API.patch(`/notifications/${id}/read
 export const markAllNotificationsRead = () => API.patch("/notifications/read-all");
 export const deleteNotification = (id) => API.delete(`/notifications/${id}`);
 
+/** default export still works if other files use it */
 export default API;
