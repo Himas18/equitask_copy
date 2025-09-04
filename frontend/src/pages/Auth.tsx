@@ -13,15 +13,16 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<'employee' | 'lead'>('employee');
+  const [role, setRole] = useState<"employee" | "lead">("employee");
   const [isLoading, setIsLoading] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signIn, signUp, profile } = useAuth();
 
   useEffect(() => {
     if (profile) {
-      navigate("/app");
+      navigate("/app/dashboard"); // redirect after login
     }
   }, [profile, navigate]);
 
@@ -62,7 +63,7 @@ const Auth = () => {
           </h1>
           <p className="text-muted-foreground mt-2">Group Task Manager</p>
         </div>
-        
+
         <Card className="shadow-lg border-0 bg-gradient-card">
           <CardHeader className="space-y-1 text-center">
             <CardTitle className="text-2xl">Welcome</CardTitle>
@@ -76,8 +77,8 @@ const Auth = () => {
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
               </TabsList>
-              
-              {/* Sign In Tab */}
+
+              {/* ✅ Sign In */}
               <TabsContent value="signin" className="space-y-4">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
@@ -100,8 +101,8 @@ const Auth = () => {
                       required
                     />
                   </div>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-gradient-primary"
                     disabled={isLoading}
                   >
@@ -109,8 +110,8 @@ const Auth = () => {
                   </Button>
                 </form>
               </TabsContent>
-              
-              {/* Sign Up Tab */}
+
+              {/* ✅ Sign Up */}
               <TabsContent value="signup" className="space-y-4">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
@@ -145,7 +146,10 @@ const Auth = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select value={role} onValueChange={(value: 'employee' | 'lead') => setRole(value)}>
+                    <Select
+                      value={role}
+                      onValueChange={(value: "employee" | "lead") => setRole(value)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select your role" />
                       </SelectTrigger>
@@ -155,8 +159,8 @@ const Auth = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     className="w-full bg-gradient-primary"
                     disabled={isLoading}
                   >

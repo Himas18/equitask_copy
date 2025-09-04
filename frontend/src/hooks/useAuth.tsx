@@ -7,14 +7,14 @@ interface User {
   id: string;
   username: string;
   email: string;
-  role?: string;
+  role: "employee" | "lead";
 }
 
 interface AuthContextType {
   profile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error?: any }>;
-  signUp: (username: string, email: string, password: string, role?: string) => Promise<{ error?: any }>;
+  signUp: (username: string, email: string, password: string, role: "employee" | "lead") => Promise<{ error?: any }>;
   signOut: () => void;
 }
 
@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // 🔹 Sign In
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     try {
@@ -45,7 +46,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         description: "Successfully logged into EquiTask",
       });
 
-      navigate("/app");
+      navigate("/app/dashboard");
       return { error: null };
     } catch (err: any) {
       toast({
@@ -59,10 +60,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signUp = async (username: string, email: string, password: string, role?: string) => {
+  // 🔹 Sign Up
+  const signUp = async (username: string, email: string, password: string, role: "employee" | "lead") => {
     setLoading(true);
     try {
-      await register({ username, email, password, role });
+      await register({ username, email, password, role }); // ✅ send role
 
       toast({
         title: "Account created",
@@ -83,6 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // 🔹 Sign Out
   const signOut = () => {
     localStorage.removeItem("token");
     setProfile(null);

@@ -7,8 +7,8 @@ const router = express.Router();
 // ✅ Get all users (team list)
 router.get("/", verifyToken, async (req, res) => {
   try {
-    const users = await User.find().select("-password"); // don’t send password
-    res.json(users);
+    const users = await User.find().select("-password");
+    res.json({ users });   // <-- return wrapped object so frontend can use data.users
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
